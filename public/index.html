@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Traduttore PDF Sicuro</title>
+    <style>
+        body { font-family: sans-serif; background: #f4f7f6; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; }
+        .container { background: white; padding: 30px; border-radius: 10px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); width: 100%; max-width: 400px; text-align: center; }
+        input, select { width: 100%; padding: 10px; margin-bottom: 15px; border: 1px solid #ccc; border-radius: 5px; box-sizing: border-box; }
+        button { background: #0078D4; color: white; border: none; padding: 12px; width: 100%; border-radius: 5px; cursor: pointer; font-size: 16px; }
+        button:disabled { background: #ccc; }
+        #status { margin-top: 15px; font-size: 14px; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h2 style="color:#0078D4">Traduttore Aziendale</h2>
+        
+        <label style="display:block; text-align:left; font-weight:bold;">1. Password Aziendale</label>
+        <input type="password" id="appPass" placeholder="Inserisci la password..." required>
+
+        <label style="display:block; text-align:left; font-weight:bold;">2. Scegli il PDF</label>
+        <input type="file" id="pdfFile" accept=".pdf" required>
+
+        <label style="display:block; text-align:left; font-weight:bold;">3. Lingua</label>
+        <select id="targetLang">
+            <option value="it">Italiano</option>
+            <option value="en">Inglese</option>
+            <option value="es">Spagnolo</option>
+            <option value="de">Tedesco</option>
+            <option value="fr">Francese</option>
+        </select>
+
+        <button onclick="traduci()" id="btn">Traduci Documento</button>
+        <div id="status"></div>
+    </div>
+
+    <script>
+        async function traduci() {
+            const pass = document.getElementById('appPass').value;
+            const file = document.getElementById('pdfFile').files[0];
+            const lang = document.getElementById('targetLang').value;
+            const status = document.getElementById('status');
+            const btn = document.getElementById('btn');
+
+            if (!pass || !file) { alert("Manca password o file!"); return; }
+
+            btn.disabled = true;
+            status.innerHTML = "⏳ Invio ad Azure in corso...";
+
+            const formData = new FormData();
+            formData.append('file', file);
+            formData.append('target_lang', lang);
+
+            try {
+                const res = await fetch('/api/traduci', {
+                    method: 'POST',
+                    headers: { 'x-app-password': pass }, // Inviamo la password nell'header
+                    body: formData
+                });
+
+                if (!res.ok) {
+                    const err = await res.text();
+                    throw new Error(err);
+                }
+
+                // Download del file
+                const blob = await res.blob();
+                const url = window.URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `Tradotto_${lang}.pdf`;
+                document.body.appendChild(a);
+                a.click();
+                status.innerHTML = "✅ Fatto!";
+            } catch (e) {
+                status.innerHTML = "❌ Errore: " + e.message;
+            } finally {
+                btn.disabled = false;
+            }
+        }
+    </script>
+</body>
+</html>
