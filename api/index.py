@@ -4,13 +4,14 @@ import os
 
 app = Flask(__name__)
 
-# CONFIGURAZIONE (Questi valori li prenderemo dalle variabili d'ambiente di Vercel)
+# CONFIGURAZIONE
 AZURE_KEY = os.environ.get('AZURE_KEY')
-AZURE_ENDPOINT = os.environ.get('AZURE_ENDPOINT') # Esempio: https://api.cognitive.microsofttranslator.com/
+AZURE_ENDPOINT = os.environ.get('AZURE_ENDPOINT')
 APP_PASSWORD = os.environ.get('APP_PASSWORD')
 
+# --- NOTA: Ho cambiato il nome della funzione qui sotto da 'handler' a 'traduci_documento' ---
 @app.route('/api/traduci', methods=['POST'])
-def handler():
+def traduci_documento():
     # 1. Controllo Sicurezza (Password)
     user_pass = request.headers.get('x-app-password')
     if user_pass != APP_PASSWORD:
@@ -23,28 +24,23 @@ def handler():
     file = request.files['file']
     target_lang = request.form.get('target_lang', 'it')
 
-    # 3. Chiamata ad Azure (Synchronous Document Translation)
-    # Documentazione: POST /translator/document:translate
+    # 3. Chiamata ad Azure
     url = f"{AZURE_ENDPOINT}/translator/document:translate?sourceLanguage=en&targetLanguage={target_lang}&api-version=2024-05-01"
     
     headers = {
         "Ocp-Apim-Subscription-Key": AZURE_KEY,
     }
 
-    # Creiamo il payload multipart come vuole Azure
     files_payload = {
         'document': (file.filename, file.stream, 'application/pdf')
     }
 
     try:
-        # Invio ad Azure
         response = requests.post(url, headers=headers, files=files_payload)
         
-        # Se Azure restituisce errore
         if response.status_code != 200:
             return Response(f"Errore Azure: {response.text}", status=500)
 
-        # 4. Restituisci il PDF tradotto al browser
         return Response(
             response.content,
             mimetype="application/pdf",
