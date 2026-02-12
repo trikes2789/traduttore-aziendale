@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Traduttore PDF Sicuro</title>
+    <title>Traduttore Aziendale</title>
     <style>
         body { font-family: sans-serif; background: #f4f7f6; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; }
         .container { background: white; padding: 30px; border-radius: 10px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); width: 100%; max-width: 400px; text-align: center; }
@@ -11,6 +11,8 @@
         button { background: #0078D4; color: white; border: none; padding: 12px; width: 100%; border-radius: 5px; cursor: pointer; font-size: 16px; }
         button:disabled { background: #ccc; }
         #status { margin-top: 15px; font-size: 14px; }
+        .error { color: red; }
+        .success { color: green; }
     </style>
 </head>
 <body>
@@ -44,7 +46,10 @@
             const status = document.getElementById('status');
             const btn = document.getElementById('btn');
 
-            if (!pass || !file) { alert("Manca password o file!"); return; }
+            if (!pass || !file) { 
+                status.innerHTML = "<span class='error'>⚠️ Manca password o file!</span>"; 
+                return; 
+            }
 
             btn.disabled = true;
             status.innerHTML = "⏳ Invio ad Azure in corso...";
@@ -54,28 +59,31 @@
             formData.append('target_lang', lang);
 
             try {
-                const response = await fetch('/api/index', {
+                // NOTA: Qui usiamo 'response', non 'res'
+                const response = await fetch('/api/traduci', {
                     method: 'POST',
-                    headers: { 'x-app-password': pass }, // Inviamo la password nell'header
+                    headers: { 'x-app-password': pass },
                     body: formData
                 });
 
-                if (!res.ok) {
-                    const err = await res.text();
-                    throw new Error(err);
+                if (!response.ok) {
+                    const errText = await response.text();
+                    throw new Error(errText || "Errore del server");
                 }
 
-                // Download del file
-                const blob = await res.blob();
+                const blob = await response.blob();
                 const url = window.URL.createObjectURL(blob);
                 const a = document.createElement('a');
                 a.href = url;
                 a.download = `Tradotto_${lang}.pdf`;
                 document.body.appendChild(a);
                 a.click();
-                status.innerHTML = "✅ Fatto!";
+                window.URL.revokeObjectURL(url);
+                
+                status.innerHTML = "<span class='success'>✅ Fatto! Download avviato.</span>";
             } catch (e) {
-                status.innerHTML = "❌ Errore: " + e.message;
+                console.error(e);
+                status.innerHTML = "<span class='error'>❌ Errore: " + e.message + "</span>";
             } finally {
                 btn.disabled = false;
             }
