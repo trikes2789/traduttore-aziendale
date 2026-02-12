@@ -54,7 +54,7 @@
             formData.append('target_lang', lang);
 
             try {
-                const res = await fetch('/api/index', {
+                const response = await fetch('/api/index', {
                     method: 'POST',
                     headers: { 'x-app-password': pass }, // Inviamo la password nell'header
                     body: formData
