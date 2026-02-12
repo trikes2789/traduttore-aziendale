@@ -9,39 +9,61 @@ AZURE_KEY = os.environ.get('AZURE_KEY')
 AZURE_ENDPOINT = os.environ.get('AZURE_ENDPOINT')
 APP_PASSWORD = os.environ.get('APP_PASSWORD')
 
-# 1. NUOVA ROTTA: Serve la Home Page
+# ROTTA HOME
 @app.route('/')
 def home():
-    # Legge il file index.html che si trova nella stessa cartella di questo script
     return send_file('index.html')
 
-# 2. ROTTA TRADUZIONE
+# ROTTA TRADUZIONE
 @app.route('/api/traduci', methods=['POST'])
 def traduci():
-    # Controllo Password
+    # 1. Controllo Password
     if request.headers.get('x-app-password') != APP_PASSWORD:
         return Response("Password errata", status=401)
 
+    # 2. Controllo File
     if 'file' not in request.files:
-        return Response("Nessun file", status=400)
+        return Response("Nessun file caricato", status=400)
     
     file = request.files['file']
     target_lang = request.form.get('target_lang', 'it')
+    
+    # --- FIX CRUCIALE: Leggiamo il file in memoria ---
+    file_data = file.read()
 
-    # Chiamata Azure
-    url = f"{AZURE_ENDPOINT}/translator/document:translate?sourceLanguage=en&targetLanguage={target_lang}&api-version=2024-05-01"
-    headers = { "Ocp-Apim-Subscription-Key": AZURE_KEY }
-    files_payload = { 'document': (file.filename, file.stream, 'application/pdf') }
+    # 3. Costruiamo l'URL (Tolto sourceLanguage=en per usare l'auto-rilevamento)
+    # Rimuoviamo eventuali doppi slash dall'endpoint se presenti
+    base_url = AZURE_ENDPOINT.rstrip('/')
+    url = f"{base_url}/translator/document:translate?targetLanguage={target_lang}&api-version=2024-05-01"
+    
+    headers = {
+        "Ocp-Apim-Subscription-Key": AZURE_KEY
+    }
+
+    # --- FIX CRUCIALE: Forziamo nome e tipo file ---
+    # Inviamo il file chiamandolo sempre 'source.pdf' per evitare errori con caratteri strani nel nome originale
+    files_payload = {
+        'document': ('source.pdf', file_data, 'application/pdf')
+    }
 
     try:
-        res = requests.post(url, headers=headers, files=files_payload)
-        if res.status_code != 200:
-            return Response(f"Errore Azure: {res.text}", status=500)
+        # Invio ad Azure
+        response = requests.post(url, headers=headers, files=files_payload)
+        
+        # Se c'è un errore, lo stampiamo per capire
+        if response.status_code != 200:
+            return Response(f"Errore Azure: {response.text}", status=500)
             
+        # Restituiamo il PDF
         return Response(
-            res.content,
+            response.content,
             mimetype="application/pdf",
-            headers={"Content-Disposition": "attachment; filename=tradotto.pdf"}
+            headers={"Content-Disposition": f"attachment; filename=tradotto_{target_lang}.pdf"}
         )
+
     except Exception as e:
         return Response(str(e), status=500)
+
+# Necessario per Vercel
+if __name__ == '__main__':
+    app.run()
