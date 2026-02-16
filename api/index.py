@@ -1,7 +1,6 @@
 from flask import Flask, request, Response, send_file
 import requests
 import os
-import io
 
 app = Flask(__name__)
 
@@ -13,10 +12,13 @@ APP_PASSWORD = os.environ.get('APP_PASSWORD')
 # --- ROTTA 1: Home Page ---
 @app.route('/')
 def home():
-    # Cerca il file index.html nella stessa cartella (api/)
-    if os.path.exists(os.path.join(os.path.dirname(__file__), 'index.html')):
-         return send_file(os.path.join(os.path.dirname(__file__), 'index.html'))
-    # Fallback se è nella root (per sicurezza)
+    # Cerca il file index.html nella stessa cartella di questo script (api/)
+    current_dir = os.path.dirname(__file__)
+    file_path = os.path.join(current_dir, 'index.html')
+    
+    if os.path.exists(file_path):
+         return send_file(file_path)
+    # Fallback: cerca nella cartella superiore se non lo trova in api/
     return send_file('../index.html')
 
 # --- ROTTA 2: API Traduzione ---
@@ -39,24 +41,24 @@ def traduci():
         # Leggiamo tutti i byte del file in memoria
         file_content = file.read()
         
-        # Se il file è vuoto, fermiamo subito
+        # Se il file è vuoto (0 byte), fermiamo subito
         if len(file_content) == 0:
             return Response("Il file inviato è vuoto.", status=400)
 
         # 3. Preparazione URL Azure
-        # Rimuoviamo slash finali per evitare doppi slash (es. .com//translator)
+        # Rimuoviamo slash finali per evitare errori nell'URL
         base_url = AZURE_ENDPOINT.rstrip('/')
         url = f"{base_url}/translator/document:translate?targetLanguage={target_lang}&api-version=2024-05-01"
         
         headers = {
             "Ocp-Apim-Subscription-Key": AZURE_KEY
-            # NOTA: Non mettiamo 'Content-Type': 'multipart/form-data' qui.
-            # La libreria 'requests' lo aggiungerà automaticamente con il boundary corretto.
+            # NOTA IMPORTANTE: Non impostare 'Content-Type' qui. 
+            # La libreria requests lo farà in automatico gestendo il 'boundary'.
         }
 
         # --- PIANO B: Forzatura MIME Type ---
-        # Azure a volte rifiuta il file se non gli diciamo ESPLICITAMENTE che è un PDF.
-        # Costruiamo una tupla: (NomeFileFinto, DatiFile, TipoMimeEsplicito)
+        # La struttura è: 'nome_parametro': ('nome_file', dati_file, 'tipo_mime')
+        # Impostando esplicitamente 'application/pdf', risolviamo l'errore "InvalidFormat/ContentType".
         files_payload = {
             'document': ('source_document.pdf', file_content, 'application/pdf')
         }
@@ -66,9 +68,9 @@ def traduci():
         
         # 5. Gestione Errori Azure
         if response.status_code != 200:
-            error_msg = f"Errore Azure ({response.status_code}): {response.text}"
-            print(error_msg) # Questo finisce nei log di Vercel
-            return Response(error_msg, status=500)
+            # Stampiamo l'errore nei log di Vercel per debug
+            print(f"ERRORE AZURE: {response.text}")
+            return Response(f"Errore Azure ({response.status_code}): {response.text}", status=500)
             
         # 6. Restituzione PDF Tradotto
         return Response(
@@ -81,7 +83,8 @@ def traduci():
         )
 
     except Exception as e:
-        return Response(f"Errore interno del server (Python): {str(e)}", status=500)
+        print(f"ERRORE SERVER: {str(e)}")
+        return Response(f"Errore interno del server: {str(e)}", status=500)
 
 # Necessario per l'ambiente locale
 if __name__ == '__main__':
